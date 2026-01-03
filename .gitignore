@@ -1,19 +1,55 @@
-*.sdf
-*.sln
-*.suo
+# Build outputs
 bin/
 bin64/
 arm64/
-vs.proj/Debug
-vs.proj/Release
-vs.proj/x64
-vs.proj/ARM64
-vs.proj/NppPlugi.*
-vs.proj/NppPluginTemplate.opensdf
-vs.proj/NppPluginTemplate.exp
-vs.proj/NppPluginTemplate.lib
-vs.proj/NppPluginTemplate.vcxproj.user
+build/
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.obj
+*.iobj
+*.ipdb
+
+# Visual Studio
+.vs/
 vs.proj/.vs/
+vs.proj/Debug/
+vs.proj/Release/
+vs.proj/x64/
+vs.proj/ARM64/
+vs.proj/Win32/
+vs.proj/EmojiDescription/
+vs.proj/NppPlugi.*/
+*.vcxproj.user
+*.suo
+*.sln
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
 *.aps
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Archives
 *.zip
+*.7z
+*.tar.gz
+
+# Backup files
 *.bak
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

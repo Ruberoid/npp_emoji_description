@@ -66,9 +66,13 @@ extern "C" __declspec(dllexport) FuncItem * getFuncsArray(int *nbF)
 }
 
 
+// Forward declarations from PluginDefinition.cpp
+void pluginBeNotified(SCNotification *notifyCode);
+LRESULT pluginMessageProc(UINT Message, WPARAM wParam, LPARAM lParam);
+
 extern "C" __declspec(dllexport) void beNotified(SCNotification *notifyCode)
 {
-	switch (notifyCode->nmhdr.code) 
+	switch (notifyCode->nmhdr.code)
 	{
 		case NPPN_SHUTDOWN:
 		{
@@ -77,24 +81,21 @@ extern "C" __declspec(dllexport) void beNotified(SCNotification *notifyCode)
 		break;
 
 		default:
+			// Call our plugin's notification handler
+			pluginBeNotified(notifyCode);
 			return;
 	}
 }
 
 
-// Here you can process the Npp Messages 
+// Here you can process the Npp Messages
 // I will make the messages accessible little by little, according to the need of plugin development.
 // Please let me know if you need to access to some messages :
 // https://github.com/notepad-plus-plus/notepad-plus-plus/issues
 //
-extern "C" __declspec(dllexport) LRESULT messageProc(UINT /*Message*/, WPARAM /*wParam*/, LPARAM /*lParam*/)
-{/*
-	if (Message == WM_MOVE)
-	{
-		::MessageBox(NULL, "move", "", MB_OK);
-	}
-*/
-	return TRUE;
+extern "C" __declspec(dllexport) LRESULT messageProc(UINT Message, WPARAM wParam, LPARAM lParam)
+{
+	return pluginMessageProc(Message, wParam, lParam);
 }
 
 #ifdef UNICODE

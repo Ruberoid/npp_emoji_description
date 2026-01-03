@@ -28,7 +28,7 @@
 //-------------------------------------//
 // Here define your plugin name
 //
-const TCHAR NPP_PLUGIN_NAME[] = TEXT("Notepad++ plugin template");
+const TCHAR NPP_PLUGIN_NAME[] = TEXT("Emoji Description");
 
 //-----------------------------------------------//
 //-- STEP 2. DEFINE YOUR PLUGIN COMMAND NUMBER --//
@@ -62,7 +62,7 @@ void commandMenuInit();
 void commandMenuCleanUp();
 
 //
-// Function which sets your command 
+// Function which sets your command
 //
 bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey *sk = NULL, bool check0nInit = false);
 
@@ -70,7 +70,24 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 //
 // Your plugin command functions
 //
-void hello();
-void helloDlg();
+void toggleShowCharInfo();
+void aboutDialog();
+
+//
+// Notification handler
+//
+void pluginBeNotified(SCNotification *notifyCode);
+
+//
+// Message handler
+//
+LRESULT pluginMessageProc(UINT Message, WPARAM wParam, LPARAM lParam);
+
+//
+// Helper functions
+//
+void updateCharacterInfo();
+uint32_t decodeUtf8Char(const unsigned char* text, int& bytesRead);
+void formatCharacterCodes(uint32_t codepoint, TCHAR* output, size_t outputSize);
 
 #endif //PLUGINDEFINITION_H
