@@ -1,0 +1,91 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v0.1.0, v1.2.3, etc.
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build x64 Release
+      working-directory: vs.proj\
+      run: msbuild EmojiDescription.vcxproj /m /p:configuration="Release" /p:platform="x64"
+
+    - name: Build x86 Release
+      working-directory: vs.proj\
+      run: msbuild EmojiDescription.vcxproj /m /p:configuration="Release" /p:platform="Win32"
+
+    - name: Build ARM64 Release
+      working-directory: vs.proj\
+      run: msbuild EmojiDescription.vcxproj /m /p:configuration="Release" /p:platform="ARM64"
+
+    - name: Create ZIP for x64
+      run: |
+        mkdir release_x64
+        copy bin64\EmojiDescription.dll release_x64\
+        Compress-Archive -Path release_x64\* -DestinationPath EmojiDescription_x64_${{ github.ref_name }}.zip
+      shell: pwsh
+
+    - name: Create ZIP for x86
+      run: |
+        mkdir release_x86
+        copy bin\EmojiDescription.dll release_x86\
+        Compress-Archive -Path release_x86\* -DestinationPath EmojiDescription_x86_${{ github.ref_name }}.zip
+      shell: pwsh
+
+    - name: Create ZIP for ARM64
+      run: |
+        mkdir release_arm64
+        copy arm64\EmojiDescription.dll release_arm64\
+        Compress-Archive -Path release_arm64\* -DestinationPath EmojiDescription_arm64_${{ github.ref_name }}.zip
+      shell: pwsh
+
+    - name: Extract version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Emoji Description ${{ github.ref_name }}
+        body: |
+          ## Emoji Description ${{ github.ref_name }}
+
+          Displays detailed character encoding information in the status bar for any character under the cursor.
+
+          ### Features
+          - Shows Unicode code point (U+XXXX)
+          - Shows decimal and hexadecimal values
+          - Shows HTML entity (&#XXXX;)
+          - Shows UTF-8 byte sequence
+          - Supports all Unicode characters including emoji
+
+          ### Installation
+          1. Download the appropriate ZIP file for your Notepad++ version:
+             - `EmojiDescription_x64_*.zip` for 64-bit Notepad++
+             - `EmojiDescription_x86_*.zip` for 32-bit Notepad++
+             - `EmojiDescription_arm64_*.zip` for ARM64 Notepad++
+          2. Extract the DLL file
+          3. Copy to `%APPDATA%\Notepad++\plugins\EmojiDescription\`
+          4. Restart Notepad++
+
+          ### Changelog
+          See [CHANGELOG.md](https://github.com/Ruberoid/npp_emoji_description/blob/main/CHANGELOG.md) for details.
+        files: |
+          EmojiDescription_x64_${{ github.ref_name }}.zip
+          EmojiDescription_x86_${{ github.ref_name }}.zip
+          EmojiDescription_arm64_${{ github.ref_name }}.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
