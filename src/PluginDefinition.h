@@ -36,7 +36,21 @@ const TCHAR NPP_PLUGIN_NAME[] = TEXT("Emoji Description");
 //
 // Here define the number of your plugin commands
 //
-const int nbFunc = 2;
+const int nbFunc = 8;
+
+//
+// Which information fields are shown in the status bar.
+// Toggled individually from the plugin menu and persisted to the plugin config.
+//
+struct DisplayFields
+{
+    bool codePoint;   // U+XXXX
+    bool name;        // Unicode character name (e.g. EM DASH)
+    bool decimal;     // Dec: NNN
+    bool hex;         // Hex: 0xNN
+    bool html;        // HTML: &#NNN;
+    bool utf8;        // UTF-8: 0x.. byte sequence
+};
 
 
 //
@@ -71,6 +85,12 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 // Your plugin command functions
 //
 void toggleShowCharInfo();
+void toggleFieldCodePoint();
+void toggleFieldName();
+void toggleFieldDecimal();
+void toggleFieldHex();
+void toggleFieldHtml();
+void toggleFieldUtf8();
 void aboutDialog();
 
 //
@@ -89,5 +109,12 @@ LRESULT pluginMessageProc(UINT Message, WPARAM wParam, LPARAM lParam);
 void updateCharacterInfo();
 uint32_t decodeUtf8Char(const unsigned char* text, int& bytesRead);
 void formatCharacterCodes(uint32_t codepoint, TCHAR* output, size_t outputSize);
+bool getUnicodeName(uint32_t codepoint, TCHAR* output, size_t outputSize);
+
+//
+// Configuration persistence (plugin config dir .ini)
+//
+void loadConfig();
+void saveConfig();
 
 #endif //PLUGINDEFINITION_H

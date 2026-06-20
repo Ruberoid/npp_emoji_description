@@ -15,10 +15,15 @@ GitHub: https://github.com/Ruberoid/npp_emoji_description
 
 When you move the cursor through text, the plugin automatically displays for the current character:
 - **Unicode code point** (U+XXXX format)
+- **Unicode character name** (e.g. `EM DASH`, `NO-BREAK SPACE`) — handy for telling look-alike characters apart; off by default
 - **Decimal** value
 - **Hexadecimal** value
 - **HTML entity** (&#XXXX; format)
 - **UTF-8 byte sequence** (hex bytes)
+
+Each field can be toggled individually from the `Plugins → Emoji Description`
+menu, so you can show just the information you care about. Your choices are
+remembered between sessions.
 
 ## Supported Characters
 
@@ -69,7 +74,8 @@ See [Building from Source](#building-from-source) section below.
 
 After installation, the plugin starts working automatically. Access plugin commands via `Plugins → Emoji Description`:
 
-- **Show Character Info** - Toggle display on/off (enabled by default)
+- **Show Character Info** - Toggle the whole display on/off (enabled by default)
+- **Show: Code Point / Character Name / Decimal / Hexadecimal / HTML Entity / UTF-8 Bytes** - Toggle each field individually (Character Name is off by default)
 - **About** - Plugin information
 
 Simply move the cursor through text, and character information will be displayed in the status bar at the bottom of the Notepad++ window.
