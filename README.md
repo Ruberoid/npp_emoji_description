@@ -54,7 +54,11 @@ U+042F | Dec: 1071 | Hex: 0x42F | HTML: &#1071; | UTF-8: 0xD0 0xAF
    - `EmojiDescription_x86_*.zip` for 32-bit Notepad++
    - `EmojiDescription_arm64_*.zip` for ARM64 Notepad++
 3. Extract the DLL file
-4. Copy to `%APPDATA%\Notepad++\plugins\EmojiDescription\`
+4. Copy it into a `EmojiDescription` subfolder of your Notepad++ `plugins` directory, so that the final path is `plugins\EmojiDescription\EmojiDescription.dll`. The `plugins` directory depends on how Notepad++ was installed:
+   - **Standard installer** (e.g. `C:\Program Files\Notepad++`): `C:\Program Files\Notepad++\plugins\EmojiDescription\`
+   - **Per-user / "Don't use %APPDATA%" installs and portable builds**: `%APPDATA%\Notepad++\plugins\EmojiDescription\`
+
+   If unsure, check `Settings → Import → Import plugin(s)...` or look at where your existing plugins live. You may need administrator rights to write into `C:\Program Files`.
 5. Restart Notepad++
 
 ### Option 2: Build from Source
