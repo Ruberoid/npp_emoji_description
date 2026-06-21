@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Per-field display toggles in the plugin menu — show only the information you
+  care about (e.g. just the UTF-8 bytes), hiding code point / decimal / hex /
+  HTML entity individually (#4)
+- Optional Unicode character name in the status bar (e.g. `EM DASH`, `NO-BREAK
+  SPACE`) to distinguish look-alike characters, off by default. Uses the system
+  `getuname.dll` lookup and covers Basic Multilingual Plane characters (#4)
+- Settings are persisted to `EmojiDescription.ini` in the Notepad++ plugin
+  config directory and restored on startup
+
 ## [0.1.0] - 2026-01-03
 
 ### Added

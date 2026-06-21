@@ -19,6 +19,7 @@
 #include "menuCmdID.h"
 #include <windows.h>
 #include <tchar.h>
+#include <shlwapi.h>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -37,6 +38,13 @@ NppData nppData;
 // Plugin state
 //
 static bool g_showCharInfo = true;
+
+// Which fields are shown. Defaults match the original behavior except for the
+// character name, which is opt-in (it depends on an OS lookup that may be absent).
+static DisplayFields g_fields = { true, false, true, true, true, true };
+
+// Full path to the plugin .ini, resolved once from the Notepad++ config dir.
+static TCHAR g_iniPath[MAX_PATH] = { 0 };
 
 //
 // Initialize your plugin data here
@@ -57,8 +65,60 @@ void pluginCleanUp()
 // You should fill your plugins commands here
 void commandMenuInit()
 {
-    setCommand(0, TEXT("Show Character Info"), toggleShowCharInfo, NULL, true);
-    setCommand(1, TEXT("About"), aboutDialog, NULL, false);
+    // Restore persisted settings before the menu check states are initialized.
+    loadConfig();
+
+    setCommand(0, TEXT("Show Character Info"),    toggleShowCharInfo,   NULL, g_showCharInfo);
+    setCommand(1, TEXT("Show: Code Point (U+)"),  toggleFieldCodePoint, NULL, g_fields.codePoint);
+    setCommand(2, TEXT("Show: Character Name"),   toggleFieldName,      NULL, g_fields.name);
+    setCommand(3, TEXT("Show: Decimal"),          toggleFieldDecimal,   NULL, g_fields.decimal);
+    setCommand(4, TEXT("Show: Hexadecimal"),      toggleFieldHex,       NULL, g_fields.hex);
+    setCommand(5, TEXT("Show: HTML Entity"),      toggleFieldHtml,      NULL, g_fields.html);
+    setCommand(6, TEXT("Show: UTF-8 Bytes"),      toggleFieldUtf8,      NULL, g_fields.utf8);
+    setCommand(7, TEXT("About"),                  aboutDialog,          NULL, false);
+}
+
+//
+// Resolve the .ini path inside the Notepad++ plugin config directory.
+//
+static void initConfigPath()
+{
+    TCHAR configDir[MAX_PATH] = { 0 };
+    ::SendMessage(nppData._nppHandle, NPPM_GETPLUGINSCONFIGDIR, MAX_PATH, (LPARAM)configDir);
+    ::PathAppend(configDir, TEXT("EmojiDescription.ini"));
+    _tcsncpy_s(g_iniPath, MAX_PATH, configDir, _TRUNCATE);
+}
+
+//
+// Load persisted settings (falling back to defaults on first run).
+//
+void loadConfig()
+{
+    initConfigPath();
+    g_showCharInfo     = ::GetPrivateProfileInt(TEXT("Display"), TEXT("Enabled"),   1, g_iniPath) != 0;
+    g_fields.codePoint = ::GetPrivateProfileInt(TEXT("Fields"),  TEXT("CodePoint"), 1, g_iniPath) != 0;
+    g_fields.name      = ::GetPrivateProfileInt(TEXT("Fields"),  TEXT("Name"),      0, g_iniPath) != 0;
+    g_fields.decimal   = ::GetPrivateProfileInt(TEXT("Fields"),  TEXT("Decimal"),   1, g_iniPath) != 0;
+    g_fields.hex       = ::GetPrivateProfileInt(TEXT("Fields"),  TEXT("Hex"),       1, g_iniPath) != 0;
+    g_fields.html      = ::GetPrivateProfileInt(TEXT("Fields"),  TEXT("Html"),      1, g_iniPath) != 0;
+    g_fields.utf8      = ::GetPrivateProfileInt(TEXT("Fields"),  TEXT("Utf8"),      1, g_iniPath) != 0;
+}
+
+//
+// Persist the current settings.
+//
+void saveConfig()
+{
+    if (!g_iniPath[0])
+        return;
+
+    ::WritePrivateProfileString(TEXT("Display"), TEXT("Enabled"),   g_showCharInfo     ? TEXT("1") : TEXT("0"), g_iniPath);
+    ::WritePrivateProfileString(TEXT("Fields"),  TEXT("CodePoint"), g_fields.codePoint ? TEXT("1") : TEXT("0"), g_iniPath);
+    ::WritePrivateProfileString(TEXT("Fields"),  TEXT("Name"),      g_fields.name      ? TEXT("1") : TEXT("0"), g_iniPath);
+    ::WritePrivateProfileString(TEXT("Fields"),  TEXT("Decimal"),   g_fields.decimal   ? TEXT("1") : TEXT("0"), g_iniPath);
+    ::WritePrivateProfileString(TEXT("Fields"),  TEXT("Hex"),       g_fields.hex       ? TEXT("1") : TEXT("0"), g_iniPath);
+    ::WritePrivateProfileString(TEXT("Fields"),  TEXT("Html"),      g_fields.html      ? TEXT("1") : TEXT("0"), g_iniPath);
+    ::WritePrivateProfileString(TEXT("Fields"),  TEXT("Utf8"),      g_fields.utf8      ? TEXT("1") : TEXT("0"), g_iniPath);
 }
 
 //
@@ -133,7 +193,79 @@ uint32_t decodeUtf8Char(const unsigned char* text, int& bytesRead)
 }
 
 //
-// Format character codes for display
+// Look up the Unicode character name (e.g. "EM DASH") for a code point.
+//
+// Uses GetUName from the system getuname.dll, the same lookup the Windows
+// Character Map (charmap.exe) relies on. The DLL is loaded lazily and the
+// function pointer cached. GetUName only covers the Basic Multilingual Plane
+// (its argument is a 16-bit WORD), so names are unavailable for code points
+// above U+FFFF (including most emoji). Returns false when no name is available.
+//
+bool getUnicodeName(uint32_t codepoint, TCHAR* output, size_t outputSize)
+{
+    typedef int (WINAPI *GetUNameFunc)(WORD wCharCode, LPWSTR lpBuf);
+    static GetUNameFunc pGetUName = nullptr;
+    static bool resolved = false;
+
+    if (!resolved) {
+        resolved = true;
+        HMODULE hMod = ::LoadLibrary(TEXT("getuname.dll"));
+        if (hMod)
+            pGetUName = reinterpret_cast<GetUNameFunc>(::GetProcAddress(hMod, "GetUName"));
+    }
+
+    if (!pGetUName || codepoint > 0xFFFF)
+        return false;
+
+    WCHAR nameBuf[256] = { 0 };
+    int len = pGetUName(static_cast<WORD>(codepoint), nameBuf);
+    if (len <= 0 || nameBuf[0] == L'\0')
+        return false;
+
+    _tcsncpy_s(output, outputSize, nameBuf, _TRUNCATE);
+    return true;
+}
+
+//
+// Append the UTF-8 byte sequence for a code point to the stream.
+//
+static void appendUtf8Bytes(std::wstringstream& ss, uint32_t codepoint)
+{
+    unsigned char bytes[4];
+    int count;
+
+    if (codepoint < 0x80) {
+        bytes[0] = static_cast<unsigned char>(codepoint);
+        count = 1;
+    }
+    else if (codepoint < 0x800) {
+        bytes[0] = static_cast<unsigned char>(0xC0 | (codepoint >> 6));
+        bytes[1] = static_cast<unsigned char>(0x80 | (codepoint & 0x3F));
+        count = 2;
+    }
+    else if (codepoint < 0x10000) {
+        bytes[0] = static_cast<unsigned char>(0xE0 | (codepoint >> 12));
+        bytes[1] = static_cast<unsigned char>(0x80 | ((codepoint >> 6) & 0x3F));
+        bytes[2] = static_cast<unsigned char>(0x80 | (codepoint & 0x3F));
+        count = 3;
+    }
+    else {
+        bytes[0] = static_cast<unsigned char>(0xF0 | (codepoint >> 18));
+        bytes[1] = static_cast<unsigned char>(0x80 | ((codepoint >> 12) & 0x3F));
+        bytes[2] = static_cast<unsigned char>(0x80 | ((codepoint >> 6) & 0x3F));
+        bytes[3] = static_cast<unsigned char>(0x80 | (codepoint & 0x3F));
+        count = 4;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        if (i > 0)
+            ss << L" ";
+        ss << L"0x" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(2) << (int)bytes[i];
+    }
+}
+
+//
+// Format the enabled character-info fields for display.
 //
 void formatCharacterCodes(uint32_t codepoint, TCHAR* output, size_t outputSize)
 {
@@ -143,47 +275,53 @@ void formatCharacterCodes(uint32_t codepoint, TCHAR* output, size_t outputSize)
     }
 
     std::wstringstream ss;
+    bool first = true;
 
-    // Unicode code point
-    ss << L"U+" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(4) << codepoint;
+    // Separator helper: " | " between fields, nothing before the first one.
+    auto sep = [&]() {
+        if (!first)
+            ss << L" | ";
+        first = false;
+    };
 
-    // Decimal
-    ss << L" | Dec: " << std::dec << codepoint;
-
-    // Hexadecimal
-    ss << L" | Hex: 0x" << std::uppercase << std::hex << codepoint;
-
-    // HTML entity
-    ss << L" | HTML: &#" << std::dec << codepoint << L";";
-
-    // UTF-8 bytes
-    ss << L" | UTF-8: ";
-    if (codepoint < 0x80) {
-        ss << L"0x" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(2) << codepoint;
+    if (g_fields.codePoint) {
+        sep();
+        ss << L"U+" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(4) << codepoint;
     }
-    else if (codepoint < 0x800) {
-        unsigned char b1 = static_cast<unsigned char>(0xC0 | (codepoint >> 6));
-        unsigned char b2 = static_cast<unsigned char>(0x80 | (codepoint & 0x3F));
-        ss << L"0x" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(2) << (int)b1
-           << L" 0x" << std::setw(2) << (int)b2;
+
+    if (g_fields.name) {
+        TCHAR nameBuf[256];
+        if (getUnicodeName(codepoint, nameBuf, 256)) {
+            sep();
+            ss << nameBuf;
+        }
     }
-    else if (codepoint < 0x10000) {
-        unsigned char b1 = static_cast<unsigned char>(0xE0 | (codepoint >> 12));
-        unsigned char b2 = static_cast<unsigned char>(0x80 | ((codepoint >> 6) & 0x3F));
-        unsigned char b3 = static_cast<unsigned char>(0x80 | (codepoint & 0x3F));
-        ss << L"0x" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(2) << (int)b1
-           << L" 0x" << std::setw(2) << (int)b2
-           << L" 0x" << std::setw(2) << (int)b3;
+
+    if (g_fields.decimal) {
+        sep();
+        ss << L"Dec: " << std::dec << codepoint;
     }
-    else {
-        unsigned char b1 = static_cast<unsigned char>(0xF0 | (codepoint >> 18));
-        unsigned char b2 = static_cast<unsigned char>(0x80 | ((codepoint >> 12) & 0x3F));
-        unsigned char b3 = static_cast<unsigned char>(0x80 | ((codepoint >> 6) & 0x3F));
-        unsigned char b4 = static_cast<unsigned char>(0x80 | (codepoint & 0x3F));
-        ss << L"0x" << std::uppercase << std::hex << std::setfill(L'0') << std::setw(2) << (int)b1
-           << L" 0x" << std::setw(2) << (int)b2
-           << L" 0x" << std::setw(2) << (int)b3
-           << L" 0x" << std::setw(2) << (int)b4;
+
+    if (g_fields.hex) {
+        sep();
+        ss << L"Hex: 0x" << std::uppercase << std::hex << codepoint;
+    }
+
+    if (g_fields.html) {
+        sep();
+        ss << L"HTML: &#" << std::dec << codepoint << L";";
+    }
+
+    if (g_fields.utf8) {
+        sep();
+        ss << L"UTF-8: ";
+        appendUtf8Bytes(ss, codepoint);
+    }
+
+    if (first) {
+        // No fields enabled — give the user a hint rather than a blank bar.
+        _sntprintf_s(output, outputSize, _TRUNCATE, TEXT("Emoji Description: no fields enabled (see Plugins menu)"));
+        return;
     }
 
     std::wstring result = ss.str();
@@ -279,6 +417,7 @@ void toggleShowCharInfo()
 
     // Update menu check state
     ::SendMessage(nppData._nppHandle, NPPM_SETMENUITEMCHECK, funcItem[0]._cmdID, g_showCharInfo);
+    saveConfig();
 
     if (g_showCharInfo) {
         updateCharacterInfo();
@@ -286,6 +425,25 @@ void toggleShowCharInfo()
         ::SendMessage(nppData._nppHandle, NPPM_SETSTATUSBAR, STATUSBAR_DOC_TYPE, (LPARAM)TEXT(""));
     }
 }
+
+//
+// Flip a single field flag: update its menu check, persist, and refresh the bar.
+//
+static void toggleField(bool& flag, int menuIndex)
+{
+    flag = !flag;
+    ::SendMessage(nppData._nppHandle, NPPM_SETMENUITEMCHECK, funcItem[menuIndex]._cmdID, flag);
+    saveConfig();
+    if (g_showCharInfo)
+        updateCharacterInfo();
+}
+
+void toggleFieldCodePoint() { toggleField(g_fields.codePoint, 1); }
+void toggleFieldName()      { toggleField(g_fields.name,      2); }
+void toggleFieldDecimal()   { toggleField(g_fields.decimal,   3); }
+void toggleFieldHex()       { toggleField(g_fields.hex,       4); }
+void toggleFieldHtml()      { toggleField(g_fields.html,      5); }
+void toggleFieldUtf8()      { toggleField(g_fields.utf8,      6); }
 
 void aboutDialog()
 {
