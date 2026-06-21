@@ -11,7 +11,9 @@ on:
 jobs:
   build:
 
-    runs-on: windows-latest
+    # Pinned to windows-2022: the project targets the v143 toolset (VS2022), and
+    # windows-latest has since moved to a newer VS that no longer ships v143.
+    runs-on: windows-2022
     strategy:
       max-parallel: 6
       matrix:
